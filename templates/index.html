@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech to Text with AI</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f4f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 {
+            font-size: 24px;
+            color: #333;
+        }
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            width: 100%;
+            max-width: 300px;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        p {
+            font-size: 18px;
+            color: #333;
+            margin: 15px 0;
+            word-wrap: break-word;
+        }
+        .output {
+            background: #f7f9fc;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #e0e4e8;
+            min-height: 60px;
+        }
+        .loader {
+            display: none;
+            margin: 20px auto;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007BFF;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Speech to Text with AI</h1>
+        <button id="recordBtn">🎙️ Start Recording</button>
+        <div class="loader" id="loader"></div>
+        <p><strong>Transcribed Text:</strong></p>
+        <div class="output" id="transcribedText">Awaiting input...</div>
+        <p><strong>AI Response:</strong></p>
+        <div class="output" id="geminiResponse">Awaiting input...</div>
+    </div>
+
+    <script>
+        const recordBtn = document.getElementById('recordBtn');
+        const transcribedText = document.getElementById('transcribedText');
+        const geminiResponse = document.getElementById('geminiResponse');
+        const loader = document.getElementById('loader');
+        
+        let mediaRecorder, audioChunks = [];
+        let isRecording = false;
+
+        recordBtn.addEventListener('click', async () => {
+            if (!isRecording) {
+                transcribedText.textContent = "Listening...";
+                geminiResponse.textContent = "Awaiting input...";
+                loader.style.display = 'block';
+                recordBtn.textContent = "⏹️ Stop Recording";
+
+                await startRecording();
+                isRecording = true;
+
+                // Automatically stop recording after a certain time (optional)
+                setTimeout(() => {
+                    if (isRecording) {
+                        stopRecording();
+                    }
+                }, 10000); // Stop after 10 seconds
+               
+                
+            } else {
+                recordBtn.textContent = "🎙️ Start Recording";
+                stopRecording();
+                isRecording = false; // Update recording state
+                loader.style.display = 'none'; // Hide loader when stopping
+            }
+        });
+        
+        async function startRecording() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+           // Check if MediaRecorder is supported
+           if (typeof MediaRecorder === 'undefined') {
+               alert("MediaRecorder not supported in your browser.");
+               return; // Exit if not supported
+           }
+
+           mediaRecorder = new MediaRecorder(stream);
+           mediaRecorder.start();
+            
+           audioChunks = []; // Clear any previous recordings
+           mediaRecorder.ondataavailable = event => {
+               audioChunks.push(event.data);
+           };
+            
+           mediaRecorder.onstop = () => {
+               const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+               sendAudio(audioBlob);
+           };
+       }
+
+       function stopRecording() {
+           return new Promise(resolve => {
+               if (mediaRecorder && isRecording) { // Check if mediaRecorder exists and is recording
+                   mediaRecorder.stop();
+                   resolve();
+               }
+           });
+       }
+
+       async function sendAudio(audioBlob) {
+           const formData = new FormData();
+           formData.append('audio', audioBlob, 'audio.webm');
+           transcribedText.textContent = "Processing your audio..."; // Feedback during processing
+           try {
+               const response = await fetch('/transcribe', {
+                   method: 'POST',
+                   body: formData
+               });
+
+               const result = await response.json();
+
+               if (response.ok) {
+                   transcribedText.textContent = result.transcribed_text || "No transcription available.";
+                   geminiResponse.textContent = result.gemini_response || "No response from AI.";
+               } else {
+                   transcribedText.textContent = result.error || "An error occurred.";
+               }
+           } catch (error) {
+               transcribedText.textContent = `Error sending audio data.`;
+           } finally {
+               loader.style.display = 'none';
+           }
+       }
+   </script>        
+</body>
+</html>
